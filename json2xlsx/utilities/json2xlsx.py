@@ -230,16 +230,19 @@ def render(workbook, cursor, y_range, x_range, render_state, tree):
 class RenderingDataError(Exception):
     pass
 
-def select_json(json_object, select_stmt):
+def select_json(json_object, select_stmt, group_name=None):
     if select_stmt == None: return json_object
     if select_stmt == "": return ""
     select_series = select_stmt.split(".")
     try:
         for st in select_series:
             if st != "":
-                json_object = json_object[st]
+                if group_name:
+                    json_object = json_object[group_name][st]
+                else:
+                    json_object = json_object[st]
     except:
-        raise RenderingDataError("No such attr '%s'" % select_stmt)
+         json_object = ""
     return json_object
 
 def render_csv_data(workbook, cursor, render_state, column_order, csv):
@@ -269,7 +272,7 @@ def render_csv_data(workbook, cursor, render_state, column_order, csv):
     cursor[0] += 1
     cursor[1] = 0
 
-def render_data(workbook, cursor, render_state, tree):
+def render_data(workbook, cursor, render_state, tree, group_name=None):
     if debugging: print "Render Data ", tree
     current_sheet = render_state['current_sheet']
     for node in tree:
@@ -278,7 +281,7 @@ def render_data(workbook, cursor, render_state, tree):
         node_type = node['type']
         if node_type == 'attr':
             json_node = render_state['json_object']
-            cell.value = select_json(json_node, node['select'])
+            cell.value = select_json(json_node, node['select'], group_name)
             try:
                 cell_style = render_state['column_to_attr'][cursor[1]]
             except:
@@ -294,7 +297,7 @@ def render_data(workbook, cursor, render_state, tree):
         elif node_type == 'group':
             save_json_obj = render_state['json_object']
             render_state['json_object'] = select_json(save_json_obj, node.get('select'))
-            render_data(workbook, cursor, render_state, node['content'])
+            render_data(workbook, cursor, render_state, node['content'], node['caption'])
             render_state['json_object'] = save_json_obj
         else:
             raise RenderingDataError()
@@ -306,7 +309,6 @@ def parse_table_script(table_script_file_name):
             table_scr_tree = TableScript.parseString(stdin_string)
         else:
             table_scr_tree = TableScript.parseFile(table_script_file_name)
-        # print table_scr_tree
         return table_scr_tree
     except ParseException, e:
         print "Table script error:"
